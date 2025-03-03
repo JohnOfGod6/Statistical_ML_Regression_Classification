@@ -5,7 +5,7 @@ This project applies **Statistical Machine Learning (SML)** methods to **regress
 It includes
 - **Regression Task**: Polynomial regression to balance underfitting & overfitting.
 - **Spam Classification Task**: Model comparison (LDA, QDA, Naïve Bayes, FLD).
-- **Performance Evaluation**: Cross-validation, ANOVA, error analysis, ROC curves.
+- **Performance Evaluation**: Cross-validation, ANOVA, error analysis, ROC curves. 
 
 ## Files
 - `jeandedieu_ngirinshuti_SML1.pdf` → Full project report.  
