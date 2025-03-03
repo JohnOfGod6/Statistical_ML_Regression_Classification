@@ -1,17 +1,25 @@
-# Statistical Machine Learning: Regression & Spam Classification
+# Statistical Machine Learning: Regression & Spam Detection
 
-## Overview
-This project applies **Statistical Machine Learning (SML)** methods to **regression and classification** problems.  
-It includes
-- **Regression Task**: Polynomial regression to balance underfitting & overfitting.
-- **Spam Classification Task**: Model comparison (LDA, QDA, Naïve Bayes, FLD).
-- **Performance Evaluation**: Cross-validation, ANOVA, error analysis, ROC curves. 
+## Project Summary
 
-## Files
-- `jeandedieu_ngirinshuti_SML1.pdf` → Full project report.  
-- `jeandedieu_ngirinshuti_SML1.Rmd` → R Markdown script for data analysis and modeling.  
+This project uses **Statistical Machine Learning (SML)** to solve two different kinds of problems: predicting numbers (regression) and sorting things into categories (classification).
 
-## How to Run the Code
-1. **Install Required Packages in R**
-   ```r
-   install.packages(c("ggplot2", "dplyr", "MASS", "caret"))
+*   **Regression Problem:** We used polynomial regression to find the right balance between a model that's too simple (underfitting) and one that's too complicated (overfitting).
+*   **Spam Detection Problem:** We compared different models to see which one is best at identifying spam emails: LDA, QDA, Naïve Bayes, and FLD.
+
+We used different methods to see how well our models worked: cross-validation, ANOVA, error analysis, and ROC curves.
+
+## Project Files
+
+*   **`jeandedieu_ngirinshuti_SML1.pdf`:** This is the full project report. It includes all the details about what we did, our results, and our conclusions.
+*   **`jeandedieu_ngirinshuti_SML1.Rmd`:** This is the R Markdown script we used to analyze the data and build the models. It shows all the steps we took.
+
+## Running the Code
+
+1.  **Install Necessary Packages in R:**
+
+    Open R or RStudio and run the following command:
+
+    ```r
+    install.packages(c("ggplot2", "dplyr", "MASS", "caret"))
+    ```
