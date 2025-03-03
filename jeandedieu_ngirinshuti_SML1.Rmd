@@ -1,0 +1,638 @@
+---
+title: "Assigment SML1"
+author: "Jean de Dieu"
+date: "2024-12-06"
+output: pdf_document
+editor_options: 
+  markdown: 
+    wrap: 72
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+# Load necessary libraries
+library(MASS)
+library(datasets)
+library(kernlab)
+library(mlbench)
+library(bestglm)
+library(glmnet)
+library(ggplot2)
+library(BMS)
+library(corrplot)
+library(car)
+library(ROCR)
+library(e1071)
+library(pROC)
+library(caret)
+library(dplyr)
+
+
+```
+
+```{r}
+# Load the dataset
+data <- read.csv('aims-sml-2024-2025-data.csv')
+head(data)
+
+```
+
+```{r}
+# Determine the size of the dataset
+n <- nrow(data)
+cat("The size of the dataset (n) is:", n)
+
+```
+
+```{r}
+# Create a scatterplot of y versus x
+ggplot(data, aes(x = x, y = y)) +
+  geom_point() +
+  labs(title = "Scatterplot of y versus x", x = "x", y = "y")
+
+```
+
+```{r}
+# Check the structure of the dataset
+str(data)
+
+# Check the unique values in the response variable
+unique(data$y)
+
+# Determine the task type
+if(is.numeric(data$y)) {
+  task_type <- "Regression"
+} else {
+  task_type <- "Classification"
+}
+cat("Based on the scatterplot and the characteristics of the response variable
+    `y`, this task is a REGRESSION Task because the target variable `y` is
+    continuous.")
+
+```
+
+Part 2: Theoretical Framework
+
+1.  Function Space
+
+The function space used in this regression task is defined as:
+
+$$
+  H = \{ f(x) = \beta_0 + \beta_1 x + \beta_2 x^2 + \dots + \beta_p x^p \mid 
+  \beta_i \in \mathbb{R} \}.
+  $$
+  2. Loss Function
+
+The loss function used to measure the error is the squared loss, defined
+as:
+
+$$
+  \text{loss}(y, f(x)) = (y - f(x))^2
+$$
+The total loss over the dataset is:
+$$L_{\text{total}} = \sum_{i=1}^n (y_i - f(x_i))^2.
+$$
+
+This loss is chosen because: . It penalizes larger errors more heavily.
+. It is convex, ensuring easier optimization. . It aligns well with
+regression models.
+
+3.  Theoretical Risk
+
+$$\text{The theoretical risk for  \( f \in H \) is:}\\
+  R(f) = \mathbb{E}[(Y - f(X))^2],\\
+  \text{where \( (X, Y) \) follows the true joint distribution of input and
+  output variables.}
+$$
+
+4.  Bayes Learning Machine 
+The Bayes learning machine minimizes the theoretical risk and is given
+by:
+
+$$ f^*(x) = \mathbb{E}[Y \mid X = x].$$
+
+5.  Empirical Risk
+
+The empirical risk, used to approximate the theoretical risk, is
+computed from the observed dataset:
+
+$$
+  \widehat{R}(f) = \frac{1}{n} \sum_{i=1}^n (y_i - f(x_i))^2.
+$$
+
+Part 3: Estimation and Model Complexity
+1.  Deriving the OLS Estimator
+
+The Ordinary Least Squares (OLS) estimator minimizes the empirical risk:
+$$
+  \widehat{R}(f) = \frac{1}{n} \sum_{i=1}^n (f(x_i) - y_i)^2.
+$$
+The polynomial model is: 
+$$
+  f(x) = \beta_0 + \beta_1 x + \dots + \beta_p x^p.
+$$
+To minimize $\hat{R}(f)$, We solve: 
+$$
+  \widehat{\beta} = \arg \min_{\beta} \| \mathbf{y} - \mathbf{X} \beta \|^2,
+$$
+ Expanding \( L(\boldsymbol{\beta}) \):
+
+$$
+L(\boldsymbol{\beta}) = \mathbf{y}^\top \mathbf{y} - 2 \mathbf{y}^\top \mathbf{X} \boldsymbol{\beta} + \boldsymbol{\beta}^\top \mathbf{X}^\top \mathbf{X} \boldsymbol{\beta}
+$$
+Minimize the Loss Function
+
+$$
+\frac{\partial L(\boldsymbol{\beta})}{\partial \boldsymbol{\beta}} = -2 \mathbf{X}^\top \mathbf{y} + 2 \mathbf{X}^\top \mathbf{X} \boldsymbol{\beta}
+$$
+The solution is:
+$$
+   \widehat{\beta} = (\mathbf{X}^\top \mathbf{X})^{-1} \mathbf{X}^\top 
+    \mathbf{y}.
+$$   
+
+The OLS estimator $\hat{f}(x)$ is then: 
+
+$$
+\widehat{f}(x) = \mathbf{X} \widehat{\beta}.
+$$
+
+2.  Properties of $\widehat{f}(x)$
+$$
+\begin{aligned}
+1. \ & \textbf{Linearity:} \ \text{Predictions are linear combinations of the predictors.} \\
+2. \ & \textbf{Unbiasedness:} \ \mathbb{E}[\widehat{\beta}] = \beta \ 
+\text{under the assumption of a correctly specified model.} \\
+3. \ & \textbf{Efficiency} \ \text{Minimizes variance among unbiased
+estimators .} \\
+4. \ & \textbf{Consistenc:} \ \text{Increasing \( p \) allows better 
+approximation but risks overfitting.}
+\end{aligned}
+$$
+3.Determining Optimal Complexity
+
+```{r}
+# Set the seed for reproducibility
+set.seed(12345)
+
+# Define a range for degrees
+degrees <- 1:15
+cv_errors <- c()
+empirical_risks <- c()
+
+# Perform V-fold cross-validation
+for (p in degrees) {
+  # Define the formula for polynomial regression
+  formula <- as.formula(paste("y ~ poly(x, ", p, ", raw = TRUE)"))
+  
+  # Define the train control for cross-validation
+  train_control <- trainControl(method = "cv", number = 10)
+  
+  # Train the model
+  model <- train(formula, data = data, method = "lm", trControl = train_control)
+  
+  # Compute the mean RMSE from the cross-validation results
+  cv_errors <- c(cv_errors, mean(model$resample$RMSE^2))  # Convert RMSE to MSE
+  
+  # Compute the empirical risk
+  fitted_values <- predict(model, data)
+  empirical_risk <- mean((data$y - fitted_values)^2)
+  empirical_risks <- c(empirical_risks, empirical_risk)
+}
+
+# Identify the optimal degree
+optimal_p <- degrees[which.min(cv_errors)]
+cat("Optimal degree p:", optimal_p, "\n")
+
+```
+
+4.The cross-validation error and empirical risk as functions of p
+
+```{r}
+# Combine data for visualization
+cv_results <- data.frame(Degree = degrees, CV_Error = cv_errors, Empirical_Risk = empirical_risks)
+
+# Plot Cross-Validation Error vs. Polynomial Degree
+ggplot(cv_results, aes(x = Degree)) +
+  geom_point(aes(y = CV_Error, color = "Cross-Validation Error")) +
+  geom_line(aes(y = CV_Error, color = "Cross-Validation Error")) +
+  geom_point(aes(y = Empirical_Risk, color = "Empirical Risk")) +
+  geom_line(aes(y = Empirical_Risk, color = "Empirical Risk")) +
+  labs(title = "Cross-Validation Error and Empirical Risk vs Polynomial Degree",
+       x = "Polynomial Degree", y = "Error") +
+  geom_vline(xintercept = optimal_p, linetype = "dashed", color = "red") +
+  theme_minimal() +
+  scale_color_manual(name = "Error Type",
+                     values = c("Cross-Validation Error" = "blue",
+                                "Empirical Risk" = "green")) +
+  theme(legend.position = "top")
+
+
+```
+Part 4: Model Comparison and Evaluation
+
+```{r}
+# Simplest model (linear regression)
+simple_model <- lm(y ~ x, data = data)
+
+# Optimal model (polynomial regression)
+optimal_model <- lm(y ~ poly(x, optimal_p, raw = TRUE), data = data)
+
+# Overly complex model (higher-degree polynomial)
+complex_model <- lm(y ~ poly(x, max(degrees), raw = TRUE), data = data)
+
+# Add predictions for each model
+data <- data %>%
+  mutate(
+    simple_pred = predict(simple_model, data),
+    optimal_pred = predict(optimal_model, data),
+    complex_pred = predict(complex_model, data)
+  )
+
+# Plot the models
+ggplot(data, aes(x = x, y = y)) +
+  geom_point(aes(color = "Observed Data"), size = 2) +  
+  geom_line(aes(y = simple_pred, color = "Simplest Model"), size = 1, linetype = "dashed") +
+  geom_line(aes(y = optimal_pred, color = "Optimal Model"), size = 1) +
+  geom_line(aes(y = complex_pred, color = "Complex Model"), size = 1, linetype = "dotted") +
+  scale_color_manual(
+    name = "Model",
+    values = c(
+      "Observed Data" = "black",
+      "Simplest Model" = "blue",
+      "Optimal Model" = "green",
+      "Complex Model" = "red"
+    )
+  ) +
+  labs(
+    title = "Model Comparison",
+    x = "x",
+    y = "y",
+    color = "Model"
+  ) +
+  theme_minimal()
+
+```
+
+2.  Perform Stochastic Hold-Out Validation
+    1. Fit and plot the models
+
+```{r}
+# Initialize test error storage
+set.seed(12345)  # For reproducibility
+S <- 100  # Number of splits
+test_errors <- data.frame(
+  Model = character(),
+  Error = numeric()
+)
+
+# Perform S hold-out validations
+for (i in 1:S) {
+  # Split data (70% training, 30% testing)
+  train_index <- createDataPartition(data$y, p = 0.7, list = FALSE)
+  train_data <- data[train_index, ]
+  test_data <- data[-train_index, ]
+  
+  # Fit models on training data
+  simple_model <- lm(y ~ x, data = train_data)
+  optimal_model <- lm(y ~ poly(x, optimal_p, raw = TRUE), data = train_data)
+  complex_model <- lm(y ~ poly(x, max(degrees), raw = TRUE), data = train_data)
+  
+  # Compute test errors
+  simple_error <- mean((predict(simple_model, test_data) - test_data$y)^2)
+  optimal_error <- mean((predict(optimal_model, test_data) - test_data$y)^2)
+  complex_error <- mean((predict(complex_model, test_data) - test_data$y)^2)
+  
+  # Store test errors
+  test_errors <- test_errors %>%
+    add_row(Model = "Simplest Model", Error = simple_error) %>%
+    add_row(Model = "Optimal Model", Error = optimal_error) %>%
+    add_row(Model = "Complex Model", Error = complex_error)
+}
+
+# Plot boxplots of test errors
+ggplot(test_errors, aes(x = Model, y = Error, fill = Model)) +
+  geom_boxplot() +
+  labs(
+    title = "Test Errors for Different Models",
+    x = "Model",
+    y = "Test Error"
+  ) +
+  theme_minimal() +
+  theme(legend.position = "none")
+
+```
+
+
+Model Performance Summary
+$$
+
+
+\begin{aligned}
+*. \ & \textbf{Simplest Model:} \\
+&\quad -
+\text{Underfits the data, resulting in high 
+test error and significant variability, 
+} \\
+&\text{indicating it is too simple to capture 
+the underlying relationship.}\\
+*. \ & \textbf{Optimal Model:} \ \\
+&\text{Achieves the lowest and most consistent
+test error, making it the best-performing model } \\
+&\text{due to its balance between 
+complexity and generalization.}\\
+*. \ & \textbf{Complex Model:} \ \\
+&\text{Performs similarly to the optimal model 
+in terms of median test error but has higher}\\
+&\text{variability, indicating overfitting
+and reduced reliability.}
+\end{aligned}
+
+$$
+
+Part 5: Further Analysis
+
+1.  Perform ANOVA on Test Errors
+
+```{r}
+# Perform ANOVA on test errors
+anova_results <- aov(Error ~ Model, data = test_errors)
+
+# Display the ANOVA table
+summary(anova_results)
+
+
+
+```
+
+$$
+\begin{aligned}
+1. \ & \textbf{ANOVA Results:} \ \text{The ANOVA results show a highly 
+significant effect of the model on test error} \\
+   &\text{(F = 4986, p < 2e-16).} \\
+2. \ & \textbf{Significance:} \ \text{This indicates that the mean test errors differ significantly across models.} \\
+3. \ & \textbf{Variance Explanation:} \ \text{The model explains a substantial portion of the variation in test errors} \\
+   &\text{(Sum Sq = 0.9927), while the residuals contribute minimally (Sum Sq = 0.0284).} \\
+4. \ & \textbf{Fit Quality:} \ \text{The small residual mean square (0.0001) suggests the models fit the data well.}
+\end{aligned}
+$$
+2. Obtain and plot the 95% confidence and prediction bands for the dataset Dn.
+
+```{r}
+# Fit the optimal model
+optimal_model <- lm(y ~ poly(x, optimal_p, raw = TRUE), data = data)
+
+# Generate prediction intervals
+predictions <- predict(optimal_model, newdata = data, interval = "predict", level = 0.95)
+confidence <- predict(optimal_model, newdata = data, interval = "confidence", level = 0.95)
+
+# Add intervals to the dataset
+data <- data %>%
+  mutate(
+    fit = predictions[, "fit"],
+    lwr_pred = predictions[, "lwr"],
+    upr_pred = predictions[, "upr"],
+    lwr_conf = confidence[, "lwr"],
+    upr_conf = confidence[, "upr"]
+  )
+
+# Plot the data with confidence and prediction bands
+ggplot(data, aes(x = x, y = y)) +
+  geom_point(color = "black") +
+  geom_line(aes(y = fit), color = "blue", size = 1, linetype = "solid", show.legend = TRUE) +
+  geom_ribbon(aes(ymin = lwr_conf, ymax = upr_conf), fill = "green", alpha = 0.3, show.legend = TRUE) +
+  geom_ribbon(aes(ymin = lwr_pred, ymax = upr_pred), fill = "red", alpha = 0.2, show.legend = TRUE) +
+  labs(
+    title = "95% Confidence and Prediction Bands",
+    x = "x",
+    y = "y"
+  ) +
+  theme_minimal()
+
+```
+
+3.  Mathematical Expressions for Bands
+
+The 95% confidence band for the true regression line is:
+$$
+    \hat{y}_i \pm t_{\alpha/2, n-p-1} \cdot \sqrt{\text{Var}(\hat{y}_i)},
+$$
+
+The 95% prediction band for a new observation is: 
+$$
+  \hat{y}_i \pm t_{\alpha/2, n-p-1} \cdot \sqrt{\text{Var}(\hat{y}_i) + \sigma^2}, \\\text{where: \(\sigma^2\) : Residual variance of the model.}
+$$
+
+4.  Comments on the Confidence and Prediction Bands
+
+$$ \begin{aligned}
+& \textbf{Confidence Band:}\ \text{It represents the uncertainty in estimating the true regression line.}\\
+    &\quad -
+    \text{Narrower bands indicate higher confidence in the model fit.}
+    \\ &\quad -
+    \text{Wider bands occur where data is sparse, reflecting greater uncertainty.}
+    \\
+& \textbf{Prediction Band:}
+    \text{It reflects the uncertainty in predicting new observations.}
+    \\
+    &\quad -
+    \text{Always wider than the confidence band as it includes regression uncertainty and observation variability.}
+    \\ &\quad -
+    \text{Wider in sparse data regions due to greater uncertainty.}
+\end{aligned} 
+$$
+
+Exercise 2: Spam Dataset Analysis
+
+1.  Plot the Distribution of the Response
+
+```{r}
+# Load the spam dataset
+data(spam)
+
+# Plot the response distribution with distinct colors for spam and nonspam
+ggplot(spam, aes(x = type, fill = type)) +
+  geom_bar() +
+  scale_fill_manual(values = c("nonspam" = "skyblue", "spam" = "orange")) +
+  labs(
+    title = "Distribution of the Response Variable (Spam vs. Non-Spam)",
+    x = "Type",
+    y = "Count",
+    fill = "Email Type"
+  ) +
+  theme_minimal()
+
+# Comment:
+# The response variable `type` is binary, representing spam and non-spam emails.
+# The plot shows that the classes are reasonably balanced, which is ideal for classification tasks.
+```
+
+```{r}
+# Display the shape of the dataset
+cat("Number of observations:", nrow(spam), "\n")
+cat("Number of features:", ncol(spam) - 1, "\n")
+```
+
+2. Comment 
+$$ 
+\begin{aligned}
+*. \ & \textbf{Response Variable:} \ \text{The dataset has 4601 observations and 57 features.} \\
+*. \ &   \ \text{The dimensionality is high relative to the sample size, which may pose challenges for some learning algorithms due to the curse of dimensionality.}
+\end{aligned}
+$$ 
+3. Statistical Perspective on the Input Space 
+
+$$
+\begin{aligned}
+*. \ & \textbf{Input Space:} -\ \text{The input space consists of numerical features representing email characteristics.} \\
+   &-\text{These include word frequencies, character frequencies, and other email attributes.} \\
+*. \ & \textbf{Statistical Perspective:} \\
+   &\quad - \text{Many features may be correlated, which could affect the performance of linear models.} \\
+   &\quad - \text{Dimensionality reduction techniques might be beneficial for better generalization.}
+\end{aligned}
+$$
+
+4.  Build Models and Plot Comparative ROC Curves
+```{r}
+# Prepare data
+set.seed(12345)
+spam$type <- as.factor(spam$type)
+
+# Split data into predictors (X) and response (Y)
+X <- spam[, -58]
+Y <- spam$type
+
+# Train-test split (using all data for training and testing)
+train_index <- createDataPartition(Y, p = 1, list = FALSE)
+train_data <- spam[train_index, ]
+test_data <- spam[train_index, ]
+
+# Train models
+lda_model <- lda(type ~ ., data = train_data)
+qda_model <- qda(type ~ ., data = train_data)
+nb_model <- naiveBayes(type ~ ., data = train_data)
+fld_model <- glm(type ~ ., data = train_data, family = binomial)
+
+# Predict probabilities
+lda_pred <- predict(lda_model, test_data)$posterior[, "spam"]
+qda_pred <- predict(qda_model, test_data)$posterior[, "spam"]
+nb_pred <- predict(nb_model, test_data, type = "raw")[, "spam"]
+fld_pred <- predict(fld_model, test_data, type = "response")
+
+# Generate ROC curves
+roc_lda <- roc(test_data$type, lda_pred, levels = rev(levels(test_data$type)))
+roc_qda <- roc(test_data$type, qda_pred, levels = rev(levels(test_data$type)))
+roc_nb <- roc(test_data$type, nb_pred, levels = rev(levels(test_data$type)))
+roc_fld <- roc(test_data$type, fld_pred, levels = rev(levels(test_data$type)))
+
+# Plot ROC curves
+ggroc(list(LDA = roc_lda, QDA = roc_qda, NaiveBayes = roc_nb, FLD = roc_fld)) +
+  labs(title = "Comparative ROC Curves for Learning Machines", x = "1 - Specificity", y = "Sensitivity") +
+  theme_minimal()
+
+```
+
+5.  Comment on ROC Curves 
+$$ \begin{aligned}
+& 1. \textbf{LDA (Red Curve):}
+\text{Performs the best, with the curve close to the top-left corner, indicating high accuracy.}
+\\ 
+& 2.\textbf{QDA (Green Curve):}
+\text{Slightly less accurate than LDA but still performs well.} \\ 
+& 3.\textbf{Naive Bayes (Cyan Curve):}
+\text{Performs the worst, with the curve further from the top-left corner, indicating lower accuracy.}
+\\  & 4.\textbf{FLD (Purple Curve):}
+\text{Similar to LDA, showing good performance.} \\
+ &
+5. \textbf{Theoretical Insights:} \\ 
+&\quad -
+\text{LDA and FLD perform well as linear classifiers on linearly separable data.}
+\\ &\quad -
+\text{QDA handles complex boundaries but may overfit when unnecessary.}
+\\ &\quad -
+\text{Naive Bayes assumes feature independence, which likely doesn't hold here, leading to lower performance.}
+\end{aligned} 
+$$
+
+6.  Stratified Stochastic Hold-Out Validation
+```{r}
+ set.seed(19671210)
+
+# Initialize storage for test errors
+S <- 50
+errors <- data.frame(Model = character(), Error = numeric(), stringsAsFactors = FALSE)
+
+# Perform 50 hold-out replications
+for (i in 1:S) {
+  # Split data (2/3 training, 1/3 testing)
+  train_index <- createDataPartition(spam$type, p = 2/3, list = FALSE)
+  train_data <- spam[train_index, ]
+  test_data <- spam[-train_index, ]
+  
+  # Train LDA and Naive Bayes models without PCA
+  lda_model <- lda(type ~ ., data = train_data)
+  nb_model <- naiveBayes(type ~ ., data = train_data)
+  
+  # Apply PCA to the data for QDA and FLD
+  pca_train <- prcomp(train_data[, -58], scale. = TRUE)
+  pca_test <- predict(pca_train, newdata = test_data[, -58])
+  
+  # Keep enough principal components to explain 95% of variance
+  var_explained <- cumsum(pca_train$sdev^2) / sum(pca_train$sdev^2)
+  num_components <- which(var_explained >= 0.95)[1]
+  
+  pca_train_data <- data.frame(pca_train$x[, 1:num_components], type = train_data$type)
+  pca_test_data <- data.frame(pca_test[, 1:num_components], type = test_data$type)
+  
+  # Train QDA and FLD models on PCA-transformed data
+  qda_model <- qda(type ~ ., data = pca_train_data)
+  fld_model <- suppressWarnings(glm(type ~ ., data = pca_train_data, family = binomial))
+  
+  # Predict and calculate errors
+  lda_error <- mean(predict(lda_model, test_data)$class != test_data$type)
+  qda_error <- mean(predict(qda_model, pca_test_data)$class != pca_test_data$type)
+  nb_error <- mean(predict(nb_model, test_data) != test_data$type)
+  fld_error <- mean(ifelse(predict(fld_model, pca_test_data, type = "response") > 0.5, "spam", "nonspam") != pca_test_data$type)
+  
+  # Store errors
+  errors <- rbind(errors, data.frame(Model = "LDA", Error = lda_error))
+  errors <- rbind(errors, data.frame(Model = "QDA", Error = qda_error))
+  errors <- rbind(errors, data.frame(Model = "Naive Bayes", Error = nb_error))
+  errors <- rbind(errors, data.frame(Model = "FLD", Error = fld_error))
+}
+
+# Display head of errors
+head(errors)
+```
+
+
+7.  Comparative Boxplots
+```{r}
+# Plot comparative boxplots
+ggplot(errors, aes(x = Model, y = Error, fill = Model)) +
+  geom_boxplot() +
+  labs(title = "Comparative Test Errors of Different Learning Machines",
+       x = "Model",
+       y = "Test Error") +
+  theme_minimal() +
+  scale_fill_manual(values = c("LDA" = "blue", "QDA" = "red", "Naive Bayes" = "green", "FLD" = "purple"))
+
+
+```
+ 
+
+8.Comment on the distribution of the test error\
+$$
+\begin{aligned}
+*. \ & \text{The test error distribution for FLD, LDA, Naive Bayes, and QDA shows a clear pattern:} \\
+   &\text{as models increase in complexity, test error and variability also increase.} \\
+*. \ & \textbf{FLD:} \ \text{The simplest model with the lowest test error and least variability, performing consistently well.} \\
+*. \ & \textbf{LDA:} \ \text{Slightly more complex than FLD, with slightly higher test error and variability.} \\
+*. \ & \textbf{Naive Bayes:} \ \text{Assumes feature independence, resulting in higher test error and variability, reflecting its limitations.} \\
+*. \ & \textbf{QDA:} \ \text{The most complex model, with the highest test error and variability, likely due to overfitting.} \\
+*. \ & \textbf{Theoretical Insights:} \ \text{Simpler models tend to generalize better, while more complex models risk overfitting, leading to higher test errors.}
+\end{aligned}
+$$
