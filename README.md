@@ -14,6 +14,12 @@ We used different methods to see how well our models worked: cross-validation, A
 *   **`jeandedieu_ngirinshuti_SML1.pdf`:** This is the full project report. It includes all the details about what we did, our results, and our conclusions.
 *   **`jeandedieu_ngirinshuti_SML1.Rmd`:** This is the R Markdown script we used to analyze the data and build the models. It shows all the steps we took.
 
+
+## Watch the Video
+
+You can see a presentation of the project here
+
+🔗 **[YouTube Video](https://www.youtube.com/watch?v=He9HnIiV494&t=214s)**
 ## Running the Code
 
 1.  **Install Necessary Packages in R:**
